@@ -1,0 +1,14 @@
+services:
+  crm:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Pon "true" si el CRM está detrás de un proxy inverso (Caddy, Nginx, Traefik)
+      TRUST_PROXY: "true"
+    volumes:
+      - crm-data:/app/data
+
+volumes:
+  crm-data:
