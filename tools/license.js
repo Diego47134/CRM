@@ -107,4 +107,17 @@ function main() {
   console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace(/^#!.*\n\/\*\*?/, '').replace(/^ \* ?/gm, ''));
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+// ¿Se ejecuta como comando (y no importado desde otro módulo)?
+// En Windows la letra de unidad puede venir en minúsculas, así que se compara sin distinguir mayúsculas.
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    const a = fs.realpathSync(path.resolve(process.argv[1]));
+    const b = fs.realpathSync(fileURLToPath(import.meta.url));
+    return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) main();
