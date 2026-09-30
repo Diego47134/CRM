@@ -19,7 +19,12 @@ if (major === 22 && minor < 13 && !process.execArgv.includes('--experimental-sql
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
   child.on('exit', (code) => process.exit(code ?? 0));
 } else {
-  await start();
+  // Sin await en el nivel superior: así el módulo también se puede cargar con require()
+  // (LiteSpeed/Passenger, usados por hostings como Hostinger).
+  start().catch((err) => {
+    console.error('[NexoCRM] Error al arrancar:', err);
+    process.exit(1);
+  });
 }
 
 async function start() {
