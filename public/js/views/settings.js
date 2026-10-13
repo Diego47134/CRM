@@ -402,54 +402,146 @@ async function backup(pane) {
 }
 
 // ---------------- Licencia ----------------
-async function license(pane) {
+let billingInterval = 'year';
+
+async function license(pane, query = {}) {
   const lic = await api.get('/license');
   state.license = { ...state.license, ...lic };
   const statusBadge = {
     active: '<span class="badge green">Activa</span>', grace: '<span class="badge red">Caducada (periodo de gracia)</span>', expired: '<span class="badge red">Caducada</span>',
     trial: '<span class="badge blue">Prueba gratuita</span>', trial_expired: '<span class="badge red">Prueba finalizada</span>',
   }[lic.status];
+  const canBuy = lic.storeEnabled && isAdmin();
+  const needsLicense = ['trial', 'trial_expired', 'expired', 'grace'].includes(lic.status);
+
   pane.innerHTML = `
+    ${lic.storeEnabled ? `<div class="card" style="margin-bottom:16px" data-store>
+      <div class="card-head"><div class="grow"><h3>${needsLicense ? 'Elige tu plan' : 'Cambiar de plan'}</h3>
+        <div class="small muted">${lic.status === 'trial_expired' ? 'Tu prueba gratuita ha terminado. Suscríbete para seguir usando el CRM: tus datos están intactos.' : 'Pago seguro con PayPal. Renovación automática; puedes cancelar cuando quieras.'}</div></div>
+        <div class="btn-group" role="group" aria-label="Periodicidad">
+          <button class="btn sm ${billingInterval === 'month' ? 'active' : ''}" data-interval="month">Mensual</button>
+          <button class="btn sm ${billingInterval === 'year' ? 'active' : ''}" data-interval="year">Anual · 2 meses gratis</button>
+        </div></div>
+      <div class="card-body"><div class="grid cols-3" data-plans><div class="muted">Cargando planes…</div></div>
+        ${canBuy ? `<div class="row small muted" style="margin-top:14px">${icon('shield')}<span class="grow">La licencia se activa sola en cuanto PayPal confirma el pago, y se renueva automáticamente en cada cobro.</span>
+          <button class="btn sm" data-sync>${icon('refresh')}Comprobar pago</button></div>`
+        : '<p class="small muted" style="margin:14px 0 0">Solo un administrador puede contratar o cambiar el plan.</p>'}
+      </div></div>` : ''}
     <div class="grid cols-2">
       <div class="card"><div class="card-head"><h3 class="grow">Estado de la licencia</h3>${statusBadge}</div><div class="card-body">
         <dl class="props">
           <dt>Plan</dt><dd><b>${esc(lic.planLabel)}</b></dd>
           ${lic.customer ? `<dt>Titular</dt><dd>${esc(lic.customer)}</dd>` : ''}
           ${lic.licenseId ? `<dt>Nº licencia</dt><dd><code>${esc(lic.licenseId)}</code></dd>` : ''}
-          <dt>${lic.readOnly ? 'Caducó' : 'Válida hasta'}</dt><dd>${fdate(lic.expires)} ${lic.readOnly ? '' : `<span class="muted">(${lic.daysLeft} días)</span>`}</dd>
+          <dt>${lic.readOnly ? 'Caducó' : (lic.plan === 'trial' ? 'Prueba hasta' : 'Válida hasta')}</dt><dd>${fdate(lic.expires)} ${lic.readOnly ? '' : `<span class="muted">(${lic.daysLeft} días)</span>`}</dd>
           <dt>Usuarios</dt><dd>${lic.seatsUsed} de ${lic.seats}</dd>
           <dt>ID de instalación</dt><dd><code class="small">${esc(lic.instanceId)}</code></dd>
         </dl>
         ${lic.error ? `<div class="badge red" style="height:auto;padding:8px 12px;margin-top:12px;white-space:normal">Licencia guardada no válida: ${esc(lic.error)}</div>` : ''}
+        ${lic.plan !== 'trial' && lic.storeEnabled ? '<p class="small muted" style="margin:12px 0 0">Para cancelar la renovación automática, entra en tu cuenta de PayPal → Configuración → Pagos automáticos.</p>' : ''}
         <h3 style="margin:18px 0 8px">Funciones incluidas</h3>
         <div class="stack" style="gap:6px">${Object.entries(lic.allFeatures).map(([k, label]) => `<div class="row small">${lic.features.includes(k) ? `<span style="color:var(--good-text)">${icon('check')}</span>` : `<span class="muted">${icon('x')}</span>`}<span class="${lic.features.includes(k) ? '' : 'muted'}">${esc(label)}</span></div>`).join('')}</div>
       </div></div>
       <div class="stack">
-        ${isAdmin() ? `<div class="card"><div class="card-head"><h3>Activar o renovar licencia</h3></div><div class="card-body stack">
-          <p class="small text-2" style="margin:0">Pega la clave de licencia que recibiste tras la compra. Si tu proveedor te la pide, facilítale el <b>ID de instalación</b>.</p>
+        ${isAdmin() ? `<div class="card"><div class="card-head"><h3>${lic.storeEnabled ? '¿Tienes una clave de licencia?' : 'Activar o renovar licencia'}</h3></div><div class="card-body stack">
+          <p class="small text-2" style="margin:0">Pega la clave de licencia que recibiste. Si tu proveedor te la pide, facilítale el <b>ID de instalación</b>.</p>
           ${lic.publicKeyLoaded ? '' : '<div class="badge yellow" style="height:auto;padding:8px 12px;white-space:normal">Esta instalación no incluye la clave pública del proveedor (server/license-public.pem), por lo que no se pueden validar licencias.</div>'}
-          <textarea data-key rows="4" placeholder="eyJpZCI6…" style="font-family:monospace;font-size:12px"></textarea>
+          <textarea data-key rows="3" placeholder="eyJpZCI6…" style="font-family:monospace;font-size:12px"></textarea>
           <div class="row"><span class="spacer"></span>${lic.plan !== 'trial' ? '<button class="btn ghost danger" data-remove>Quitar licencia</button>' : ''}<button class="btn primary" data-activate>${icon('key')}Activar</button></div>
         </div></div>` : ''}
-        <div class="card"><div class="card-head"><h3>Planes anuales</h3></div><div class="card-body flush">
+        ${lic.storeEnabled ? '' : `<div class="card"><div class="card-head"><h3>Planes</h3></div><div class="card-body flush">
           <table class="table"><thead><tr><th>Plan</th><th class="num">Usuarios</th><th>Incluye</th></tr></thead>
           <tbody>${Object.entries(lic.plans).map(([k, p]) => `<tr ${k === lic.plan ? 'style="background:var(--brand-soft)"' : ''}><td><b>${esc(p.label)}</b></td><td class="num">${p.seats}</td><td class="small">${p.features.length === Object.keys(lic.allFeatures).length ? 'Todo' : esc(p.features.map((f) => lic.allFeatures[f].split(/[ ,/]/)[0]).join(', '))}</td></tr>`).join('')}</tbody></table>
-        </div></div>
+        </div></div>`}
       </div>
     </div>`;
+
+  const reload = async () => { const { reloadShell } = await import('../main.js'); await reloadShell(); };
+
+  // ---- Tienda ----
+  if (lic.storeEnabled) {
+    let catalog = null;
+    const fmt = (v) => new Intl.NumberFormat(state.settings.locale || 'es-ES', { style: 'currency', currency: catalog.currency, maximumFractionDigits: Number.isInteger(v) ? 0 : 2 }).format(v);
+    const drawPlans = () => {
+      const box = $('[data-plans]', pane);
+      if (!catalog) return;
+      box.innerHTML = catalog.plans.map((p) => {
+        const price = p[billingInterval];
+        const current = lic.plan === p.id && lic.status === 'active';
+        const featured = p.id === 'pro';
+        return `<div class="card" style="box-shadow:none;${featured ? 'border:2px solid var(--brand)' : ''}"><div class="card-body stack" style="gap:10px;height:100%">
+          <div class="row"><h3 class="grow" style="font-size:16px">${esc(p.label)}</h3>${featured ? '<span class="badge blue">Más elegido</span>' : ''}${current ? '<span class="badge green">Tu plan</span>' : ''}</div>
+          <div><span style="font-size:28px;font-weight:700">${esc(fmt(price))}</span><span class="muted"> / ${billingInterval === 'month' ? 'mes' : 'año'}</span>
+            ${billingInterval === 'year' ? `<div class="small muted">equivale a ${esc(fmt(Math.round((price / 12) * 100) / 100))} al mes</div>` : '<div class="small muted">sin permanencia</div>'}</div>
+          <div class="small"><b>Hasta ${p.seats} usuarios</b></div>
+          <div class="small text-2 grow">${esc(p.summary)}</div>
+          ${canBuy ? `<button class="btn ${featured ? 'primary' : ''}" data-buy="${esc(p.id)}">${current ? 'Renovar / cambiar' : 'Suscribirme con PayPal'}</button>` : ''}
+        </div></div>`;
+      }).join('');
+    };
+    api.get('/license/store/plans').then((c) => { catalog = c; drawPlans(); })
+      .catch((err) => { $('[data-plans]', pane).innerHTML = `<div class="badge red" style="height:auto;padding:8px 12px;white-space:normal">${esc(err.message)}</div>`; });
+
+    $$('[data-interval]', pane).forEach((b) => b.addEventListener('click', () => {
+      billingInterval = b.dataset.interval;
+      $$('[data-interval]', pane).forEach((x) => x.classList.toggle('active', x === b));
+      drawPlans();
+    }));
+
+    $('[data-plans]', pane).addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-buy]');
+      if (!b) return;
+      b.disabled = true;
+      b.textContent = 'Conectando con PayPal…';
+      try {
+        const r = await api.post('/license/store/checkout', { plan: b.dataset.buy, interval: billingInterval, crm_url: location.origin });
+        location.href = r.approve_url;
+      } catch (err) { toastError(err); drawPlans(); }
+    });
+
+    const sync = async ({ silent = false } = {}) => {
+      const r = await api.post('/license/store/sync');
+      if (r.updated) {
+        toast('¡Pago confirmado! Tu licencia ya está activa. Gracias por tu confianza.', 'success');
+        await reload();
+        return true;
+      }
+      if (!silent) {
+        if (!r.subscription) toast('No hay ninguna suscripción para esta instalación todavía.');
+        else if (r.error) toastError(new Error(r.error));
+        else toast(`Suscripción ${r.subscription.status === 'ACTIVE' ? 'activa' : r.subscription.status}. Licencia válida hasta ${fdate(r.subscription.expires)}.`);
+      }
+      return false;
+    };
+    $('[data-sync]', pane)?.addEventListener('click', () => sync().catch(toastError));
+
+    if (query.purchase === 'ok' && isAdmin()) {
+      toast('Confirmando tu pago…');
+      (async () => {
+        for (let i = 0; i < 6; i++) {
+          try { if (await sync({ silent: i < 5 })) return; } catch (err) { if (i === 5) toastError(err); }
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      })();
+      history.replaceState(null, '', '#/settings/license');
+    } else if (query.purchase === 'cancel') {
+      toast('Has cancelado el pago. Puedes suscribirte cuando quieras.');
+      history.replaceState(null, '', '#/settings/license');
+    }
+  }
+
   $('[data-activate]', pane)?.addEventListener('click', async () => {
     const key = $('[data-key]', pane).value.trim();
     if (!key) return;
     try {
       await api.post('/license', { key });
       toast('¡Licencia activada! Gracias por tu confianza.', 'success');
-      const { reloadShell } = await import('../main.js');
-      await reloadShell();
+      await reload();
     } catch (err) { toastError(err); }
   });
   $('[data-remove]', pane)?.addEventListener('click', async () => {
     if (!(await confirmDialog('¿Quitar la licencia de esta instalación?', { okLabel: 'Quitar' }))) return;
-    try { await api.del('/license'); const { reloadShell } = await import('../main.js'); await reloadShell(); } catch (err) { toastError(err); }
+    try { await api.del('/license'); await reload(); } catch (err) { toastError(err); }
   });
 }
 

@@ -47,6 +47,8 @@ Variables de entorno (ver `.env.example`; se lee `.env` automáticamente si exis
 | `TRUST_PROXY` | – | `true` detrás de Nginx/Caddy/Traefik |
 | `JWT_SECRET` | autogenerado | Secreto de sesión (se guarda en la BD si no se indica) |
 | `LICENSE_PUBLIC_KEY_FILE` | `server/license-public.pem` | Clave pública para validar licencias |
+| `LICENSE_SERVER_URL` | – | Servidor de licencias para la venta automática con PayPal |
+| `ADMIN_RESET_EMAIL` / `ADMIN_RESET_PASSWORD` | – | Recupera el acceso de administrador al arrancar (bórralas después) |
 
 ### Con Docker
 
@@ -111,6 +113,10 @@ Planes incluidos (editables en `server/license.js`):
 | Business | 50 | + API REST, webhooks, auditoría |
 
 > Al ser software autoalojado en JavaScript, un cliente con acceso al servidor podría modificar el código. La firma evita la falsificación y el uso casual sin pagar; la protección real es el valor del soporte y las actualizaciones. Si necesitas control total, ofrécelo también **alojado por ti** (una instancia por cliente con Docker).
+
+### Venta automática (PayPal, mensual o anual)
+
+El CRM puede vender y renovar licencias solo: el cliente elige plan mensual o anual en *Configuración → Licencia*, paga con PayPal y la licencia se genera y activa automáticamente. Necesita el servidor de licencias de la carpeta `license-server/`. Guía paso a paso: [`docs/VENTA-AUTOMATICA.md`](docs/VENTA-AUTOMATICA.md).
 
 Consulta [`docs/MODELO-DE-NEGOCIO.md`](docs/MODELO-DE-NEGOCIO.md) para precios sugeridos y cómo venderlo.
 

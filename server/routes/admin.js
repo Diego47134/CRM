@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { hashPassword, validatePassword, publicUser, requireRole, generateApiKey } from '../auth.js';
 import { HttpError, coerceField, idParam, toInt } from '../http.js';
-import { getSettings, setSetting, DEFAULT_SETTINGS } from '../db.js';
+import { getSetting, getSettings, setSetting, DEFAULT_SETTINGS } from '../db.js';
+import { syncLicense } from '../store.js';
 import { requireFeature, FEATURES, PLANS } from '../license.js';
 import { USER_COLORS } from './auth.js';
 
@@ -128,7 +129,7 @@ export function settingsRoutes({ db, events }) {
   return r;
 }
 
-export function licenseRoutes({ db, license, events }) {
+export function licenseRoutes({ db, license, events, store }) {
   const r = Router();
 
   r.get('/', (_req, res) => {
@@ -138,6 +139,44 @@ export function licenseRoutes({ db, license, events }) {
       publicKeyLoaded: license.publicKeyLoaded,
       allFeatures: FEATURES,
       plans: PLANS,
+      storeEnabled: !!store,
+    });
+  });
+
+  // ---- Compra con PayPal a través del servidor de licencias ----
+  const needStore = () => {
+    if (!store) throw new HttpError(404, 'La compra en línea no está configurada en esta instalación');
+  };
+
+  r.get('/store/plans', async (_req, res) => {
+    needStore();
+    res.json(await store.plans());
+  });
+
+  r.post('/store/checkout', requireRole('admin'), async (req, res) => {
+    needStore();
+    const { plan, interval } = req.body || {};
+    let crmUrl;
+    try { crmUrl = new URL(String(req.body?.crm_url)).origin; } catch { throw new HttpError(400, 'URL del CRM no válida'); }
+    const result = await store.checkout({
+      plan, interval, crm_url: crmUrl,
+      instance_id: getSetting(db, 'instance_id'),
+      customer: getSetting(db, 'company_name'),
+      email: req.user.email,
+    });
+    events.record(req, 'checkout', 'license', null, `${plan} · ${interval}`);
+    res.json(result);
+  });
+
+  r.post('/store/sync', requireRole('admin'), async (req, res) => {
+    needStore();
+    const result = await syncLicense({ db, license, store }, { force: true });
+    if (result.updated) events.record(req, 'activated', 'license', null, `${result.remote.plan} · ${result.remote.interval} (automática)`);
+    res.json({
+      updated: result.updated,
+      subscription: result.remote ? { status: result.remote.status, plan: result.remote.plan, interval: result.remote.interval, expires: result.remote.expires } : null,
+      error: result.error,
+      license: { ...license.state(), seatsUsed: license.activeSeatsUsed() },
     });
   });
 

@@ -55,12 +55,15 @@ function applyTheme() {
 function licenseBanner() {
   const lic = state.license;
   if (!lic) return '';
+  const cta = (label) => `<a class="btn sm ${lic.storeEnabled ? 'primary' : ''}" href="#/settings/license">${label}</a>`;
+  const buy = lic.storeEnabled ? 'Comprar licencia' : 'Activar licencia';
   if (lic.readOnly) {
-    return `<div class="banner bad">${icon('shield')}<span class="grow">${lic.status === 'trial_expired' ? 'El periodo de prueba ha terminado.' : 'Tu licencia ha caducado.'} El CRM está en <b>modo solo lectura</b>.</span><a class="btn sm" href="#/settings/license">Activar licencia</a></div>`;
+    return `<div class="banner bad">${icon('shield')}<span class="grow">${lic.status === 'trial_expired' ? 'Tu prueba gratuita ha terminado.' : 'Tu licencia ha caducado.'} El CRM está en <b>modo solo lectura</b>; tus datos están a salvo.</span>${cta(buy)}</div>`;
   }
-  if (lic.status === 'grace') return `<div class="banner bad">${icon('shield')}<span class="grow">Tu licencia caducó. Te quedan ${lic.daysLeft + 7} días de gracia antes del modo solo lectura.</span><a class="btn sm" href="#/settings/license">Renovar</a></div>`;
-  if (lic.status === 'trial' && lic.daysLeft <= 7) return `<div class="banner warn">${icon('clock')}<span class="grow">Quedan ${lic.daysLeft} días de prueba gratuita.</span><a class="btn sm" href="#/settings/license">Activar licencia</a></div>`;
-  if (lic.status === 'active' && lic.daysLeft <= 30) return `<div class="banner warn">${icon('clock')}<span class="grow">Tu licencia caduca en ${lic.daysLeft} días.</span><a class="btn sm" href="#/settings/license">Renovar</a></div>`;
+  if (lic.status === 'grace') return `<div class="banner bad">${icon('shield')}<span class="grow">Tu licencia caducó. Te quedan ${lic.daysLeft + 7} días de gracia antes del modo solo lectura.</span>${cta(lic.storeEnabled ? 'Renovar ahora' : 'Renovar')}</div>`;
+  if (lic.status === 'trial' && lic.daysLeft <= 7) return `<div class="banner warn">${icon('clock')}<span class="grow">Quedan ${lic.daysLeft} días de prueba gratuita.</span>${cta(buy)}</div>`;
+  // Las licencias con renovación automática (suscripción) no muestran aviso de caducidad.
+  if (lic.status === 'active' && !lic.billing && lic.daysLeft <= 30) return `<div class="banner warn">${icon('clock')}<span class="grow">Tu licencia caduca en ${lic.daysLeft} días.</span>${cta('Renovar')}</div>`;
   return '';
 }
 
@@ -204,6 +207,14 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+function sessionFlag(key) {
+  try {
+    if (sessionStorage.getItem(key)) return true;
+    sessionStorage.setItem(key, '1');
+  } catch { /* sin almacenamiento */ }
+  return false;
+}
+
 function parseHash() {
   const raw = location.hash.replace(/^#/, '') || '/';
   const [path, qs] = raw.split('?');
@@ -222,6 +233,10 @@ async function route() {
   let r;
   for (r of ROUTES) { match = path.match(r.path); if (match) break; }
   if (!match) { view.innerHTML = `<div class="empty"><h2>Página no encontrada</h2><p><a href="#/">Volver al panel</a></p></div>`; return; }
+  if (path === '/' && state.license?.readOnly && state.license?.storeEnabled && state.user.role === 'admin' && !sessionFlag('buy_redirect')) {
+    location.hash = '#/settings/license';
+    return;
+  }
   const navId = r.navFrom ? match[r.navFrom] : r.nav;
   $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === navId));
   if (r.feature && !hasFeature(r.feature)) {

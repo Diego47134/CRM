@@ -59,6 +59,10 @@ async function start() {
   const { applyAdminReset } = await import('./admin-reset.js');
   applyAdminReset(db);
 
+  // Venta en línea: recoge automáticamente las licencias compradas y sus renovaciones.
+  const { startAutoSync } = await import('./store.js');
+  if (startAutoSync(created.ctx)) console.log(`[NexoCRM] Tienda de licencias: ${created.ctx.store.url}`);
+
   // Algunos hostings (Passenger/LiteSpeed) pasan PORT como ruta de socket en lugar de número.
   const rawPort = process.env.PORT || '3000';
   const port = /^\d+$/.test(rawPort) ? Number(rawPort) : rawPort;

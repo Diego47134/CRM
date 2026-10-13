@@ -6,6 +6,7 @@ import { authenticate, requireRole } from './auth.js';
 import { HttpError } from './http.js';
 import { createLicenseService, licenseGuard, requireFeature } from './license.js';
 import { createEvents } from './events.js';
+import { createStore } from './store.js';
 import { crudRouter } from './crud.js';
 import { resourceDefs } from './resources.js';
 import { setupRoutes, authRoutes, meRoutes } from './routes/auth.js';
@@ -21,12 +22,12 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(here, '..', 'public');
 
-export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..', 'data', 'crm.db') } = {}) {
+export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..', 'data', 'crm.db'), store = createStore() } = {}) {
   const db = openDb(dbFile);
   const license = createLicenseService(db);
   const events = createEvents(db, license);
   const resources = resourceDefs(db);
-  const ctx = { db, license, events, resources };
+  const ctx = { db, license, events, resources, store };
 
   const app = express();
   app.disable('x-powered-by');
@@ -104,5 +105,5 @@ export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..'
     res.status(500).json({ error: 'Error interno del servidor' });
   });
 
-  return { app, db, license };
+  return { app, db, license, ctx };
 }

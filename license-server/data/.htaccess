@@ -1,0 +1,5 @@
+# Protege la base de datos si el servidor web sirve esta carpeta directamente. No lo borres.
+Deny from all
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>

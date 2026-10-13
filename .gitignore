@@ -5,3 +5,5 @@ data/backups/
 tools/keys/
 .env
 *.log
+**/data/*.db
+**/data/*.db-*

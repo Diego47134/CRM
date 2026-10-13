@@ -10,6 +10,10 @@
  *       Emite una licencia firmada. Si indicas --instance, solo funcionará en esa instalación
  *       (el cliente ve su ID de instancia en Configuración → Licencia).
  *
+ *   node tools/license.js export-key
+ *       Imprime tu clave privada en una sola línea (base64) para pegarla en la variable
+ *       LICENSE_PRIVATE_KEY del servidor de licencias (license-server/).
+ *
  *   node tools/license.js inspect <licencia>
  *       Muestra el contenido de una licencia y verifica su firma.
  */
@@ -89,6 +93,13 @@ function main() {
     console.log('\nClave para el cliente (cópiala completa):\n');
     console.log(key);
     console.log('');
+    return;
+  }
+  if (cmd === 'export-key') {
+    if (!fs.existsSync(PRIVATE)) { console.error('No hay clave privada en tools/keys/private.pem'); process.exit(1); }
+    console.log('\nValor para LICENSE_PRIVATE_KEY (cópialo entero, es una sola línea):\n');
+    console.log(Buffer.from(fs.readFileSync(PRIVATE, 'utf8')).toString('base64'));
+    console.log('\n¡No lo compartas con nadie! Quien lo tenga puede crear licencias.\n');
     return;
   }
   if (cmd === 'inspect') {

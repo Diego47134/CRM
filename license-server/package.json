@@ -1,0 +1,17 @@
+{
+  "name": "nexocrm-license-server",
+  "version": "1.0.0",
+  "description": "Servidor de licencias de NexoCRM: venta con PayPal y emisión automática de licencias",
+  "type": "module",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

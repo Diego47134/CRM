@@ -91,6 +91,8 @@ export function createLicenseService(db) {
           features: Array.isArray(lic.features) ? lic.features : plan.features,
           issued: lic.issued,
           expires: lic.expires,
+          subscription: lic.subscription || null,
+          billing: lic.billing || null, // 'month' | 'year' si procede de una suscripción con renovación automática
           daysLeft,
           readOnly: status === 'expired',
           instanceId,
