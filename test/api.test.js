@@ -305,3 +305,20 @@ test('copia de seguridad', async () => {
   const buf = Buffer.from(await res.arrayBuffer());
   assert.equal(buf.subarray(0, 15).toString(), 'SQLite format 3');
 });
+
+test('recuperación de acceso por variables de entorno', async () => {
+  const { applyAdminReset } = await import('../server/admin-reset.js');
+  assert.equal(applyAdminReset(db, {}), null, 'sin variables no hace nada');
+  assert.equal(applyAdminReset(db, { ADMIN_RESET_EMAIL: 'admin@test.com', ADMIN_RESET_PASSWORD: 'corta' }), null);
+  let r = applyAdminReset(db, { ADMIN_RESET_EMAIL: 'ADMIN@test.com', ADMIN_RESET_PASSWORD: 'nuevaClave123' });
+  assert.equal(r.created, false);
+  assert.equal((await post('/auth/login', { email: 'admin@test.com', password: 'password123' })).status, 401);
+  assert.equal((await get('/me')).status, 401, 'cierra las sesiones abiertas');
+  const login = await post('/auth/login', { email: 'admin@test.com', password: 'nuevaClave123' });
+  assert.equal(login.status, 200);
+  assert.equal(login.data.user.role, 'admin');
+  token = login.data.token;
+  r = applyAdminReset(db, { ADMIN_RESET_EMAIL: 'nuevo@test.com', ADMIN_RESET_PASSWORD: 'otraClave123' });
+  assert.equal(r.created, true);
+  assert.equal((await post('/auth/login', { email: 'nuevo@test.com', password: 'otraClave123' })).status, 200);
+});

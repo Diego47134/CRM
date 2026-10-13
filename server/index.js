@@ -56,6 +56,9 @@ async function start() {
   }
   const { app, db } = created;
 
+  const { applyAdminReset } = await import('./admin-reset.js');
+  applyAdminReset(db);
+
   // Algunos hostings (Passenger/LiteSpeed) pasan PORT como ruta de socket en lugar de número.
   const rawPort = process.env.PORT || '3000';
   const port = /^\d+$/.test(rawPort) ? Number(rawPort) : rawPort;
