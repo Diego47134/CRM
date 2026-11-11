@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "NexoCRM - CRM completo autoalojado con licencia anual",
   "type": "module",
-  "private": true,
+  "license": "MIT",
   "main": "index.js",
   "engines": {
     "node": ">=22.13"
