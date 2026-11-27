@@ -77,7 +77,7 @@ export const activityFields = () => [
   { key: 'due_at', label: 'Fecha y hora', type: 'datetime' },
   { key: 'duration_min', label: 'Duración (minutos)', type: 'number', min: 0 },
   { key: 'owner_id', label: 'Responsable', type: 'owner' },
-  { key: 'done', label: 'Completada', type: 'checkbox' },
+  { key: 'status', label: 'Estado', type: 'select', options: [['todo', 'Por hacer'], ['doing', 'En curso'], ['done', 'Hecha']], default: 'todo', required: true },
   { key: 'contact_id', label: 'Contacto', type: 'lookup', entity: 'contacts', labelKey: 'contact_name' },
   { key: 'company_id', label: 'Empresa', type: 'lookup', entity: 'companies', labelKey: 'company_name' },
   { key: 'deal_id', label: 'Oportunidad', type: 'lookup', entity: 'deals', labelKey: 'deal_title' },
@@ -155,10 +155,10 @@ export async function openDealForm(values = {}) {
 
 export async function openActivityForm(values = {}) {
   return formModal({
-    title: values.id ? 'Editar actividad' : 'Nueva actividad', fields: activityFields(), values, size: 'wide',
+    title: values.id ? 'Editar tarea' : 'Nueva tarea', fields: activityFields(), values, size: 'wide',
     onSubmit: async (data) => {
       const r = await saveRecord('/activities', values.id, data);
-      toast(values.id ? 'Actividad actualizada' : 'Actividad creada', 'success');
+      toast(values.id ? 'Tarea actualizada' : 'Tarea creada', 'success');
       return r;
     },
   });
@@ -291,7 +291,7 @@ export function timeline(container, target) {
   const actItem = (a) => `<div class="tl-item ${a.done ? 'done' : ''}" data-act="${a.id}">
     <div class="tl-icon">${icon(activityIcon(a.type))}</div>
     <div class="grow">
-      <div class="row"><label class="check grow"><input type="checkbox" data-toggle="${a.id}" ${a.done ? 'checked' : ''}><b class="${a.done ? '' : ''}">${esc(a.subject)}</b></label>
+      <div class="row"><label class="check grow"><input type="checkbox" data-toggle="${a.id}" ${a.done ? 'checked' : ''}><b>${esc(a.subject)}</b>${a.status === 'doing' ? ' <span class="badge yellow">En curso</span>' : ''}</label>
         <button class="btn ghost sm icon-only" data-edit-act="${a.id}" aria-label="Editar">${icon('edit')}</button></div>
       <div class="small ${isOverdue(a.due_at, a.done) ? 'prio-high' : 'muted'}">${esc(L.activityType[a.type])}${a.due_at ? ` · ${fdatetime(a.due_at)}` : ''}${a.owner_name ? ` · ${esc(a.owner_name)}` : ''}${a.deal_title && target.key !== 'deal_id' ? ` · ${esc(a.deal_title)}` : ''}</div>
       ${a.description && a.description !== a.subject ? `<div class="tl-body small">${esc(a.description)}</div>` : ''}

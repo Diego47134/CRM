@@ -347,3 +347,28 @@ test('vaciar datos de ejemplo conserva usuarios reales, configuración y licenci
   r = await post('/quotes', { items: [{ description: 'Primera', quantity: 1, unit_price: 10 }] });
   assert.match(r.data.number, /-0001$/, 'la numeración vuelve a empezar');
 });
+
+test('tablero de tareas: estados Por hacer → En curso → Hecho sincronizados con «completada»', async () => {
+  const co = (await post('/companies', { name: 'Cliente Tareas' })).data;
+  let r = await post('/activities', { subject: 'Diseñar logo', company_id: co.id });
+  assert.equal(r.data.status, 'todo');
+  assert.equal(r.data.done, 0);
+  const id = r.data.id;
+  r = await patch(`/activities/${id}`, { status: 'doing', position: 3 });
+  assert.equal(r.data.status, 'doing');
+  assert.equal(r.data.done, 0);
+  r = await patch(`/activities/${id}`, { status: 'done' });
+  assert.equal(r.data.done, 1);
+  assert.ok(r.data.done_at);
+  r = await patch(`/activities/${id}`, { done: false });
+  assert.equal(r.data.status, 'todo', 'desmarcar la casilla la devuelve a pendiente');
+  await patch(`/activities/${id}`, { status: 'doing' });
+  r = await patch(`/activities/${id}`, { done: true });
+  assert.equal(r.data.status, 'done', 'marcar la casilla la pasa a hecho');
+  assert.equal((await patch(`/activities/${id}`, { status: 'inventado' })).status, 400);
+  r = await get(`/activities?board=14&company_id=${co.id}`);
+  assert.equal(r.data.total, 1, 'las hechas recientes aparecen en el tablero');
+  db.prepare("UPDATE activities SET done_at = '2020-01-01T00:00:00Z' WHERE id = ?").run(id);
+  r = await get(`/activities?board=14&company_id=${co.id}`);
+  assert.equal(r.data.total, 0, 'las hechas antiguas salen del tablero');
+});

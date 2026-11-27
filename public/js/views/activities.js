@@ -1,31 +1,161 @@
 import { api } from '../api.js';
 import {
-  $, $$, esc, icon, L, opts, ownerCell, fdatetime, setTitle, toastError, isOverdue, activityIcon, today,
+  $, $$, esc, icon, L, opts, ownerCell, fdatetime, setTitle, toast, toastError, isOverdue, activityIcon, today,
 } from '../ui.js';
 import { listView } from '../list.js';
 import { openActivityForm } from './shared.js';
 
-let mode = 'list';
+let mode = 'board';
 let calMonth = null;
 
+const STATUS = [
+  ['todo', 'Por hacer', 'var(--series-1)'],
+  ['doing', 'En curso', 'var(--series-4)'],
+  ['done', 'Hecho', 'var(--good)'],
+];
+
 export function render(root, query = {}) {
-  setTitle('Actividades');
+  setTitle('Tareas');
+  if (query.when) mode = 'list';
   root.innerHTML = `
     <div class="page-head">
-      <div class="grow"><h1>Actividades</h1><div class="sub">Tareas, llamadas, reuniones y plazos</div></div>
+      <div class="grow"><h1>Tareas</h1><div class="sub">Tu trabajo con cada cliente: tareas, llamadas, reuniones y plazos</div></div>
       <div class="btn-group">
+        <button class="btn ${mode === 'board' ? 'active' : ''}" data-mode="board">${icon('kanban')}<span class="hide-sm">Tablero</span></button>
         <button class="btn ${mode === 'list' ? 'active' : ''}" data-mode="list">${icon('list')}<span class="hide-sm">Lista</span></button>
         <button class="btn ${mode === 'calendar' ? 'active' : ''}" data-mode="calendar">${icon('calendar')}<span class="hide-sm">Calendario</span></button>
       </div>
-      <button class="btn primary" data-new>${icon('plus')}Nueva actividad</button>
+      <button class="btn primary" data-new>${icon('plus')}Nueva tarea</button>
     </div>
     <div data-body></div>`;
   const body = $('[data-body]', root);
-  const draw = () => (mode === 'list' ? list(body, query) : calendar(body));
+  const draw = () => (mode === 'board' ? board(body) : mode === 'list' ? list(body, query) : calendar(body));
   $$('[data-mode]', root).forEach((b) => b.addEventListener('click', () => { mode = b.dataset.mode; render(root, {}); }));
-  $('[data-new]', root).addEventListener('click', async () => { if (await openActivityForm()) draw(); });
-  if (query.new) openActivityForm().then((r) => r && draw());
+  $('[data-new]', root).addEventListener('click', async () => { if (await openActivityForm({ status: 'todo' })) draw(); });
+  if (query.new) openActivityForm({ status: 'todo' }).then((r) => r && draw());
   draw();
+}
+
+// ---------------- Tablero de trabajo: Por hacer → En curso → Hecho ----------------
+async function board(body) {
+  let ownerSel = 'me';
+  try { ownerSel = sessionStorage.getItem('tasks_owner') ?? 'me'; } catch { /* sin almacenamiento */ }
+  body.innerHTML = `
+    <div class="row wrap" style="margin-bottom:12px">
+      <input type="search" data-q placeholder="Filtrar por tarea o cliente…" style="max-width:280px">
+      <select data-owner style="width:auto" aria-label="Responsable">
+        <option value="me" ${ownerSel === 'me' ? 'selected' : ''}>Mis tareas</option>
+        <option value="" ${ownerSel === '' ? 'selected' : ''}>Todo el equipo</option>
+      </select>
+      <span class="muted small">Arrastra las tarjetas para cambiar su estado. «Hecho» muestra las últimas 2 semanas.</span>
+    </div>
+    <div class="kanban" data-kanban></div>`;
+  const kanban = $('[data-kanban]', body);
+  let tasks = [];
+
+  async function load() {
+    try {
+      const res = await api.get('/activities', { board: 14, limit: 500, owner_id: $('[data-owner]', body).value, q: $('[data-q]', body).value });
+      tasks = res.data;
+      draw();
+    } catch (err) { toastError(err); }
+  }
+
+  const client = (a) => a.company_name || a.contact_name || '';
+  const card = (a) => {
+    const late = isOverdue(a.due_at, a.done);
+    const done = a.status === 'done';
+    return `<article class="kcard" draggable="true" data-task="${a.id}" style="${done ? 'opacity:.7' : ''}">
+      <div class="row" style="align-items:flex-start;gap:6px">${icon(activityIcon(a.type))}
+        <span class="title grow" style="${done ? 'text-decoration:line-through' : ''}">${esc(a.subject)}</span>
+        ${a.priority === 'high' ? '<span class="badge red" title="Prioridad alta">!</span>' : ''}</div>
+      ${client(a)
+        ? `<div class="meta"><a href="#/${a.company_id ? 'companies' : 'contacts'}/${a.company_id || a.contact_id}">${esc(client(a))}</a>${a.deal_title ? ` · ${esc(a.deal_title)}` : ''}</div>`
+        : '<div class="meta muted">Sin cliente · haz clic para asignarlo</div>'}
+      ${a.due_at ? `<div class="meta ${late ? 'late' : ''}" style="margin-top:4px">${icon('clock')} ${esc(fdatetime(a.due_at))}</div>` : ''}
+    </article>`;
+  };
+
+  function draw() {
+    kanban.innerHTML = STATUS.map(([key, label, color]) => {
+      const items = tasks.filter((a) => a.status === key)
+        .sort((x, y) => (x.position - y.position) || String(x.due_at || '9').localeCompare(String(y.due_at || '9')) || x.id - y.id);
+      return `<section class="kcol" data-status="${key}">
+        <div class="kcol-head"><div class="name"><span class="dot" style="background:${color}"></span><span class="grow">${label}</span><span class="badge">${items.length}</span></div></div>
+        <div class="kcol-body">
+          ${key === 'todo' ? '<form data-quick><input type="text" name="subject" placeholder="+ Nueva tarea (Enter)" aria-label="Nueva tarea rápida"></form>' : ''}
+          ${items.map(card).join('') || '<div class="muted small" style="padding:8px;text-align:center">Suelta aquí</div>'}
+        </div></section>`;
+    }).join('');
+    $('[data-quick]', kanban)?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const subject = e.target.subject.value.trim();
+      if (!subject) return;
+      try {
+        const first = tasks.filter((t) => t.status === 'todo').reduce((m, t) => Math.min(m, t.position), 0);
+        tasks.push(await api.post('/activities', { subject, type: 'task', status: 'todo', position: first - 1 }));
+        draw();
+        $('[data-quick] input', kanban)?.focus();
+      } catch (err) { toastError(err); }
+    });
+  }
+
+  let dragId = null;
+  kanban.addEventListener('dragstart', (e) => {
+    const c = e.target.closest('.kcard');
+    if (!c) return;
+    dragId = Number(c.dataset.task);
+    c.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(dragId));
+  });
+  kanban.addEventListener('dragend', (e) => {
+    e.target.closest('.kcard')?.classList.remove('dragging');
+    $$('.kcol.drop', kanban).forEach((c) => c.classList.remove('drop'));
+  });
+  kanban.addEventListener('dragover', (e) => {
+    const col = e.target.closest('.kcol');
+    if (!col) return;
+    e.preventDefault();
+    $$('.kcol.drop', kanban).forEach((c) => c !== col && c.classList.remove('drop'));
+    col.classList.add('drop');
+  });
+  kanban.addEventListener('drop', async (e) => {
+    const col = e.target.closest('.kcol');
+    if (!col || !dragId) return;
+    e.preventDefault();
+    col.classList.remove('drop');
+    const task = tasks.find((t) => t.id === dragId);
+    dragId = null;
+    if (!task) return;
+    const status = col.dataset.status;
+    const others = tasks.filter((t) => t.status === status && t.id !== task.id).sort((a, b) => a.position - b.position);
+    const over = e.target.closest('.kcard');
+    let position;
+    if (over && Number(over.dataset.task) !== task.id) {
+      const idx = others.findIndex((t) => t.id === Number(over.dataset.task));
+      position = idx > 0 ? (others[idx - 1].position + others[idx].position) / 2 : others[idx].position - 1;
+    } else position = (others.at(-1)?.position ?? 0) + 1;
+    try {
+      Object.assign(task, await api.patch(`/activities/${task.id}`, { status, position }));
+      draw();
+      if (status === 'done') toast('✔ Tarea hecha', 'success');
+    } catch (err) { toastError(err); }
+  });
+  kanban.addEventListener('click', async (e) => {
+    const c = e.target.closest('.kcard');
+    if (!c || e.target.closest('a')) return;
+    const a = tasks.find((t) => t.id === Number(c.dataset.task));
+    if (a && await openActivityForm(a)) load();
+  });
+
+  $('[data-owner]', body).addEventListener('change', (e) => {
+    try { sessionStorage.setItem('tasks_owner', e.target.value); } catch { /* sin almacenamiento */ }
+    load();
+  });
+  let t;
+  $('[data-q]', body).addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 250); });
+  load();
 }
 
 function list(body, query) {

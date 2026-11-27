@@ -213,6 +213,8 @@ export function resourceDefs(db) {
       duration_min: { type: 'int', min: 0, max: 100000, label: 'Duración (min)' },
       priority: { type: 'enum', values: ['low', 'normal', 'high'], default: 'normal', label: 'Prioridad' },
       done: { type: 'bool', label: 'Completada' },
+      status: { type: 'enum', values: ['todo', 'doing', 'done'], label: 'Estado' },
+      position: { type: 'num', label: 'Posición' },
       contact_id: { type: 'ref', label: 'Contacto' },
       company_id: { type: 'ref', label: 'Empresa' },
       deal_id: { type: 'ref', label: 'Oportunidad' },
@@ -223,6 +225,9 @@ export function resourceDefs(db) {
     filters: {
       type: 'a.type', owner_id: 'a.owner_id', contact_id: 'a.contact_id', company_id: 'a.company_id', deal_id: 'a.deal_id', ticket_id: 'a.ticket_id',
       done: (v) => ['a.done = ?', [v === '1' || v === 'true' ? 1 : 0]],
+      status: 'a.status',
+      // Tablero: pendientes y en curso + hechas en los últimos N días
+      board: (v) => ["(a.status != 'done' OR a.done_at >= ?)", [new Date(Date.now() - Math.min(Math.max(Number(v) || 14, 1), 365) * 86400000).toISOString()]],
       when: (v) => {
         const today = new Date().toISOString().slice(0, 10);
         if (v === 'overdue') return ['a.done = 0 AND a.due_at < ?', [today]];
@@ -235,9 +240,15 @@ export function resourceDefs(db) {
     },
     sorts: { due_at: 'a.due_at', subject: 'a.subject', type: 'a.type', created_at: 'a.created_at', owner: 'u.name', priority: 'a.priority' },
     defaultSort: 'a.done ASC, a.due_at IS NULL, a.due_at ASC',
-    bulkFields: ['owner_id', 'done'],
+    bulkFields: ['owner_id', 'done', 'status'],
     summary: (r) => r.subject,
     beforeSave(data, existing) {
+      // Estado y casilla «completada» siempre coherentes
+      if (data.status !== undefined && data.status !== null) data.done = data.status === 'done' ? 1 : 0;
+      else if (data.done !== undefined) {
+        data.status = data.done ? 'done' : (existing && existing.status !== 'done' ? existing.status : 'todo');
+      }
+      if (data.status === null) delete data.status;
       if (data.done !== undefined) {
         if (data.done && !existing?.done) data.done_at = new Date().toISOString();
         if (!data.done) data.done_at = null;
@@ -246,7 +257,7 @@ export function resourceDefs(db) {
     csv: [
       { key: 'id', label: 'ID' }, { key: 'type', label: 'Tipo' }, { key: 'subject', label: 'Asunto' },
       { key: 'due_at', label: 'Fecha' }, { key: 'duration_min', label: 'Duración' }, { key: 'priority', label: 'Prioridad' },
-      { key: 'done', label: 'Completada' }, { key: 'contact_name', label: 'Contacto' }, { key: 'company_name', label: 'Empresa' },
+      { key: 'done', label: 'Completada' }, { key: 'status', label: 'Estado' }, { key: 'contact_name', label: 'Contacto' }, { key: 'company_name', label: 'Empresa' },
       { key: 'deal_title', label: 'Oportunidad' }, { key: 'owner_name', label: 'Responsable' }, { key: 'description', label: 'Descripción' },
     ],
   };

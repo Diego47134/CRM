@@ -304,6 +304,13 @@ const MIGRATIONS = [
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
   `,
+  // v2: estado de las tareas para el tablero de trabajo (Por hacer → En curso → Hecho)
+  `
+  ALTER TABLE activities ADD COLUMN status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo','doing','done'));
+  ALTER TABLE activities ADD COLUMN position REAL NOT NULL DEFAULT 0;
+  UPDATE activities SET status = 'done' WHERE done = 1;
+  CREATE INDEX idx_activities_status ON activities(status);
+  `,
 ];
 
 export const DEFAULT_SETTINGS = {

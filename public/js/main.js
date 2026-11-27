@@ -31,7 +31,7 @@ const NAV = [
   { id: 'contacts', href: '#/contacts', label: 'Contactos', icon: 'users' },
   { id: 'companies', href: '#/companies', label: 'Empresas', icon: 'building' },
   { id: 'deals', href: '#/deals', label: 'Oportunidades', icon: 'target' },
-  { id: 'activities', href: '#/activities', label: 'Actividades', icon: 'checkSquare', badge: 'tasks' },
+  { id: 'activities', href: '#/activities', label: 'Tareas', icon: 'checkSquare', badge: 'tasks' },
   { section: 'Facturación', feature: 'quotes' },
   { id: 'products', href: '#/products', label: 'Productos', icon: 'box', feature: 'products' },
   { id: 'quotes', href: '#/quotes', label: 'Presupuestos', icon: 'file', feature: 'quotes' },
