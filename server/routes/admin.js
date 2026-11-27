@@ -342,7 +342,7 @@ export function auditRoutes({ db, license }) {
 export function resetDataRoutes({ db, events }) {
   const r = Router();
   r.post('/', requireRole('admin'), (req, res) => {
-    if (req.body?.confirm !== 'BORRAR') throw new HttpError(400, 'Escribe BORRAR para confirmar');
+    if (String(req.body?.confirm || '').trim().toUpperCase() !== 'BORRAR') throw new HttpError(400, 'Escribe BORRAR para confirmar');
     const tables = ['quote_items', 'quotes', 'notes', 'activities', 'tickets', 'deals', 'contacts', 'companies', 'products'];
     const removed = tx(db, () => {
       const counts = {};

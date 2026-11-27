@@ -334,9 +334,9 @@ test('vaciar datos de ejemplo conserva usuarios reales, configuración y licenci
   const licenseBefore = db.prepare("SELECT value FROM settings WHERE key = 'license_key'").get()?.value ?? null;
   const usersBefore = count('users');
 
-  let r = await post('/admin/reset-data', { confirm: 'borrar' });
+  let r = await post('/admin/reset-data', { confirm: 'no' });
   assert.equal(r.status, 400, 'exige escribir BORRAR');
-  r = await post('/admin/reset-data', { confirm: 'BORRAR' });
+  r = await post('/admin/reset-data', { confirm: ' borrar ' });
   assert.equal(r.status, 200);
   for (const t of ['contacts', 'companies', 'deals', 'activities', 'notes', 'products', 'quotes', 'quote_items', 'tickets']) assert.equal(count(t), 0, t);
   assert.equal(count('users'), usersBefore - 2, 'solo se borran los usuarios de ejemplo');

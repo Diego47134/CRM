@@ -86,7 +86,8 @@ export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..'
 
   app.use('/api', api);
 
-  app.use(express.static(PUBLIC_DIR, { index: 'index.html', maxAge: '1h' }));
+  // Sin caché larga: el navegador revalida (ETag) y siempre usa la última versión tras un despliegue.
+  app.use(express.static(PUBLIC_DIR, { index: 'index.html', maxAge: 0, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
   app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
   // Manejador de errores
