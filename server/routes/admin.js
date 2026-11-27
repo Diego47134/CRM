@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { hashPassword, validatePassword, publicUser, requireRole, generateApiKey } from '../auth.js';
 import { HttpError, coerceField, idParam, toInt } from '../http.js';
-import { getSetting, getSettings, setSetting, DEFAULT_SETTINGS } from '../db.js';
+import { getSetting, getSettings, setSetting, tx, DEFAULT_SETTINGS } from '../db.js';
 import { syncLicense } from '../store.js';
 import { requireFeature, FEATURES, PLANS } from '../license.js';
 import { USER_COLORS } from './auth.js';
@@ -331,6 +331,32 @@ export function auditRoutes({ db, license }) {
     res.json({ data, total, page, limit });
   });
 
+  return r;
+}
+
+/**
+ * Vacía los datos comerciales (p. ej. los datos de ejemplo) para empezar a usar el CRM de verdad.
+ * Conserva usuarios reales, configuración, embudos, campos personalizados, integraciones y licencia.
+ * Permitido también en modo solo lectura: no da acceso a ninguna función de pago.
+ */
+export function resetDataRoutes({ db, events }) {
+  const r = Router();
+  r.post('/', requireRole('admin'), (req, res) => {
+    if (req.body?.confirm !== 'BORRAR') throw new HttpError(400, 'Escribe BORRAR para confirmar');
+    const tables = ['quote_items', 'quotes', 'notes', 'activities', 'tickets', 'deals', 'contacts', 'companies', 'products'];
+    const removed = tx(db, () => {
+      const counts = {};
+      for (const t of tables) counts[t] = Number(db.prepare(`DELETE FROM ${t}`).run().changes);
+      // Usuarios creados por los datos de ejemplo (nunca el usuario que hace la petición)
+      counts.demo_users = Number(db.prepare("DELETE FROM users WHERE email LIKE '%@demo.local' AND id != ?").run(req.user.id).changes);
+      db.prepare('DELETE FROM audit_log').run();
+      setSetting(db, 'next_quote_number', 1);
+      setSetting(db, 'next_invoice_number', 1);
+      return counts;
+    });
+    events.record(req, 'reset', 'system', null, `Datos vaciados: ${Object.entries(removed).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    res.json({ ok: true, removed });
+  });
   return r;
 }
 

@@ -11,7 +11,7 @@ import { crudRouter } from './crud.js';
 import { resourceDefs } from './resources.js';
 import { setupRoutes, authRoutes, meRoutes } from './routes/auth.js';
 import {
-  userRoutes, settingsRoutes, licenseRoutes, customFieldRoutes, apiKeyRoutes, webhookRoutes, auditRoutes, backupRoutes,
+  userRoutes, settingsRoutes, licenseRoutes, customFieldRoutes, apiKeyRoutes, webhookRoutes, auditRoutes, backupRoutes, resetDataRoutes,
 } from './routes/admin.js';
 import { pipelineRoutes } from './routes/pipelines.js';
 import { quoteRoutes } from './routes/quotes.js';
@@ -53,6 +53,7 @@ export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..'
   // A partir de aquí todo requiere autenticación.
   api.use(authenticate(db, license));
   api.use('/license', licenseRoutes(ctx));
+  api.use('/admin/reset-data', resetDataRoutes(ctx));
   api.use(licenseGuard(license));
   api.use('/me', meRoutes(ctx));
   api.use('/users', userRoutes(ctx));

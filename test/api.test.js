@@ -322,3 +322,28 @@ test('recuperación de acceso por variables de entorno', async () => {
   assert.equal(r.created, true);
   assert.equal((await post('/auth/login', { email: 'nuevo@test.com', password: 'otraClave123' })).status, 200);
 });
+
+test('vaciar datos de ejemplo conserva usuarios reales, configuración y licencia', async () => {
+  const { seedDemo } = await import('../server/demo.js');
+  const me = (await get('/me')).data;
+  db.exec('DELETE FROM quotes'); // los datos de ejemplo se cargan en una instalación nueva
+  seedDemo(db, me.id);
+  const count = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
+  assert.ok(count('contacts') > 10 && count('quotes') > 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users WHERE email LIKE '%@demo.local'").get().n, 2);
+  const licenseBefore = db.prepare("SELECT value FROM settings WHERE key = 'license_key'").get()?.value ?? null;
+  const usersBefore = count('users');
+
+  let r = await post('/admin/reset-data', { confirm: 'borrar' });
+  assert.equal(r.status, 400, 'exige escribir BORRAR');
+  r = await post('/admin/reset-data', { confirm: 'BORRAR' });
+  assert.equal(r.status, 200);
+  for (const t of ['contacts', 'companies', 'deals', 'activities', 'notes', 'products', 'quotes', 'quote_items', 'tickets']) assert.equal(count(t), 0, t);
+  assert.equal(count('users'), usersBefore - 2, 'solo se borran los usuarios de ejemplo');
+  assert.equal((await get('/me')).status, 200, 'mi sesión sigue activa');
+  assert.ok(count('pipelines') > 0 && count('stages') > 0, 'se conservan los embudos');
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'license_key'").get()?.value ?? null, licenseBefore);
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'next_invoice_number'").get().value, '1');
+  r = await post('/quotes', { items: [{ description: 'Primera', quantity: 1, unit_price: 10 }] });
+  assert.match(r.data.number, /-0001$/, 'la numeración vuelve a empezar');
+});

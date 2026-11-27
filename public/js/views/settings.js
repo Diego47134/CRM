@@ -12,7 +12,7 @@ const TABS = [
   { id: 'import', label: 'Importar / exportar', icon: 'upload', show: isManager, feature: 'import_export' },
   { id: 'integrations', label: 'API y webhooks', icon: 'zap', show: () => true, feature: 'api' },
   { id: 'audit', label: 'Auditoría', icon: 'shield', show: isManager, feature: 'audit' },
-  { id: 'backup', label: 'Copia de seguridad', icon: 'database', show: isAdmin },
+  { id: 'backup', label: 'Copias y datos', icon: 'database', show: isAdmin },
   { id: 'license', label: 'Licencia', icon: 'key', show: () => true },
 ];
 
@@ -392,13 +392,36 @@ async function audit(pane, query = {}) {
 
 // ---------------- Copia de seguridad ----------------
 async function backup(pane) {
-  pane.innerHTML = `<div class="card" style="max-width:720px"><div class="card-body stack">
-    <h3>Copia de seguridad completa</h3>
-    <p class="text-2" style="margin:0">Descarga un archivo con toda la base de datos (SQLite). Guárdalo en un lugar seguro. Para restaurarlo, sustituye el archivo <code>data/crm.db</code> del servidor con el CRM detenido.</p>
-    <p class="text-2" style="margin:0">Recomendación: programa también copias automáticas del directorio <code>data/</code> en tu servidor (ver README).</p>
-    <div><button class="btn primary" data-backup>${icon('download')}Descargar copia ahora</button></div>
-  </div></div>`;
+  pane.innerHTML = `<div class="stack" style="max-width:720px">
+    <div class="card"><div class="card-body stack">
+      <h3>Copia de seguridad completa</h3>
+      <p class="text-2" style="margin:0">Descarga un archivo con toda la base de datos (SQLite). Guárdalo en un lugar seguro. Para restaurarlo, sustituye el archivo de la base de datos del servidor con el CRM detenido.</p>
+      <div><button class="btn primary" data-backup>${icon('download')}Descargar copia ahora</button></div>
+    </div></div>
+    <div class="card" style="border-color:var(--bad)"><div class="card-body stack">
+      <h3 style="color:var(--bad-text)">Empezar de cero: borrar todos los datos</h3>
+      <p class="text-2" style="margin:0">Elimina los <b>datos de ejemplo</b> (o cualquier dato de prueba) para empezar a usar el CRM de verdad:
+        contactos, empresas, oportunidades, actividades, notas, productos, presupuestos, facturas, tickets y el registro de actividad.
+        También elimina los usuarios de ejemplo (Laura Gómez y Carlos Ruiz).</p>
+      <p class="text-2" style="margin:0"><b>Se conserva:</b> tu usuario y los demás usuarios reales, los datos de tu empresa y la configuración, los embudos y etapas, los campos personalizados, las integraciones y la licencia.</p>
+      <p class="small" style="margin:0;color:var(--bad-text)">No se puede deshacer. Descarga antes una copia de seguridad si tienes dudas.</p>
+      <div><button class="btn danger" data-reset>${icon('trash')}Borrar todos los datos…</button></div>
+    </div></div>
+  </div>`;
   $('[data-backup]', pane).addEventListener('click', () => download('/backup', null, 'crm-backup.db').catch(toastError));
+  $('[data-reset]', pane).addEventListener('click', async () => {
+    const r = await formModal({
+      title: 'Borrar todos los datos',
+      fields: [{ key: 'confirm', label: 'Para confirmar, escribe BORRAR en mayúsculas', required: true, full: true }],
+      submitLabel: 'Borrar definitivamente',
+      onSubmit: (d) => api.post('/admin/reset-data', { confirm: d.confirm }),
+    });
+    if (!r) return;
+    toast('Datos borrados. Tu CRM está listo para empezar.', 'success');
+    const { reloadShell } = await import('../main.js');
+    await reloadShell();
+    location.hash = '#/';
+  });
 }
 
 // ---------------- Licencia ----------------
