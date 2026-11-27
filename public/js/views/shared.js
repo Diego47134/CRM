@@ -73,7 +73,8 @@ export const dealFields = (values = {}) => [
 export const activityFields = () => [
   { key: 'type', label: 'Tipo', type: 'select', options: opts(L.activityType), default: 'task', required: true },
   { key: 'priority', label: 'Prioridad', type: 'select', options: [['low', 'Baja'], ['normal', 'Normal'], ['high', 'Alta']], default: 'normal', required: true },
-  { key: 'subject', label: 'Asunto', required: true, full: true },
+  { key: 'subject', label: 'Tarea (título corto)', required: true, full: true },
+  { key: 'description', label: 'Detalle de la tarea', type: 'textarea', rows: 7, placeholder: 'Describe aquí todo lo que hay que hacer…' },
   { key: 'due_at', label: 'Fecha y hora', type: 'datetime' },
   { key: 'duration_min', label: 'Duración (minutos)', type: 'number', min: 0 },
   { key: 'owner_id', label: 'Responsable', type: 'owner' },
@@ -81,7 +82,6 @@ export const activityFields = () => [
   { key: 'contact_id', label: 'Contacto', type: 'lookup', entity: 'contacts', labelKey: 'contact_name' },
   { key: 'company_id', label: 'Empresa', type: 'lookup', entity: 'companies', labelKey: 'company_name' },
   { key: 'deal_id', label: 'Oportunidad', type: 'lookup', entity: 'deals', labelKey: 'deal_title' },
-  { key: 'description', label: 'Descripción / notas', type: 'textarea' },
 ];
 
 export const ticketFields = () => [

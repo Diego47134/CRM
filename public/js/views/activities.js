@@ -36,6 +36,18 @@ export function render(root, query = {}) {
   draw();
 }
 
+/**
+ * Tareas largas: la primera línea (hasta ~110 caracteres, cortada en una palabra) es el título
+ * y el texto completo se guarda como detalle, para que no se pierda nada.
+ */
+export function splitTask(text) {
+  const t = text.trim();
+  const firstLine = t.split('\n')[0].trim();
+  if (t.length <= 110 && !t.includes('\n')) return { subject: t, description: null };
+  const subject = firstLine.length <= 110 ? firstLine : `${firstLine.slice(0, 107).replace(/\s+\S*$/, '')}…`;
+  return { subject, description: t };
+}
+
 // ---------------- Tablero de trabajo: Por hacer → En curso → Hecho ----------------
 async function board(body) {
   let ownerSel = 'me';
@@ -49,7 +61,7 @@ async function board(body) {
       </select>
       <span class="muted small">Arrastra las tarjetas para cambiar su estado. «Hecho» muestra las últimas 2 semanas.</span>
     </div>
-    <div class="kanban" data-kanban></div>`;
+    <div class="kanban tasks" data-kanban></div>`;
   const kanban = $('[data-kanban]', body);
   let tasks = [];
 
@@ -65,10 +77,18 @@ async function board(body) {
   const card = (a) => {
     const late = isOverdue(a.due_at, a.done);
     const done = a.status === 'done';
+    // Si el detalle empieza por el título (tarea larga escrita de una vez), se muestra el texto completo una sola vez.
+    const full = String(a.description || '').trim();
+    const merged = full && full.startsWith(a.subject.replace(/…$/, ''));
+    const extra = !merged && full && full !== a.subject.trim() ? full : '';
+    const long = (txt) => txt.length > 140 || txt.includes('\n');
+    const titleText = merged ? full : a.subject;
     return `<article class="kcard" draggable="true" data-task="${a.id}" style="${done ? 'opacity:.7' : ''}">
       <div class="row" style="align-items:flex-start;gap:6px">${icon(activityIcon(a.type))}
-        <span class="title grow" style="${done ? 'text-decoration:line-through' : ''}">${esc(a.subject)}</span>
+        <span class="title grow ${merged ? 'kclamp kmerged' : ''}" style="${done ? 'text-decoration:line-through' : ''}">${esc(titleText)}</span>
         ${a.priority === 'high' ? '<span class="badge red" title="Prioridad alta">!</span>' : ''}</div>
+      ${extra ? `<div class="kdesc kclamp">${esc(extra)}</div>` : ''}
+      ${(merged && long(full)) || (extra && long(extra)) ? '<button type="button" class="btn ghost sm" data-expand style="height:22px;padding:0 6px;margin:2px 0 4px">Ver más</button>' : ''}
       ${client(a)
         ? `<div class="meta"><a href="#/${a.company_id ? 'companies' : 'contacts'}/${a.company_id || a.contact_id}">${esc(client(a))}</a>${a.deal_title ? ` · ${esc(a.deal_title)}` : ''}</div>`
         : '<div class="meta muted">Sin cliente · haz clic para asignarlo</div>'}
@@ -83,19 +103,28 @@ async function board(body) {
       return `<section class="kcol" data-status="${key}">
         <div class="kcol-head"><div class="name"><span class="dot" style="background:${color}"></span><span class="grow">${label}</span><span class="badge">${items.length}</span></div></div>
         <div class="kcol-body">
-          ${key === 'todo' ? '<form data-quick><input type="text" name="subject" placeholder="+ Nueva tarea (Enter)" aria-label="Nueva tarea rápida"></form>' : ''}
+          ${key === 'todo' ? `<form data-quick><textarea name="text" rows="1" class="kquick" placeholder="+ Nueva tarea…" title="Enter guarda · Mayús+Enter hace un salto de línea" aria-label="Nueva tarea rápida"></textarea>
+            <div class="small muted" style="margin-top:4px">Enter guarda · Mayús+Enter salto de línea</div></form>` : ''}
           ${items.map(card).join('') || '<div class="muted small" style="padding:8px;text-align:center">Suelta aquí</div>'}
         </div></section>`;
     }).join('');
-    $('[data-quick]', kanban)?.addEventListener('submit', async (e) => {
+    const form = $('[data-quick]', kanban);
+    if (!form) return;
+    const box = form.text;
+    const grow = () => { box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 320)}px`; };
+    box.addEventListener('input', grow);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+    });
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const subject = e.target.subject.value.trim();
-      if (!subject) return;
+      const text = box.value.trim();
+      if (!text) return;
       try {
         const first = tasks.filter((t) => t.status === 'todo').reduce((m, t) => Math.min(m, t.position), 0);
-        tasks.push(await api.post('/activities', { subject, type: 'task', status: 'todo', position: first - 1 }));
+        tasks.push(await api.post('/activities', { ...splitTask(text), type: 'task', status: 'todo', position: first - 1 }));
         draw();
-        $('[data-quick] input', kanban)?.focus();
+        $('[data-quick] textarea', kanban)?.focus();
       } catch (err) { toastError(err); }
     });
   }
@@ -143,6 +172,12 @@ async function board(body) {
     } catch (err) { toastError(err); }
   });
   kanban.addEventListener('click', async (e) => {
+    const exp = e.target.closest('[data-expand]');
+    if (exp) {
+      const open = exp.closest('.kcard').classList.toggle('kopen');
+      exp.textContent = open ? 'Ver menos' : 'Ver más';
+      return;
+    }
     const c = e.target.closest('.kcard');
     if (!c || e.target.closest('a')) return;
     const a = tasks.find((t) => t.id === Number(c.dataset.task));
